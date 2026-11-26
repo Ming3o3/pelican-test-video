@@ -1,0 +1,24 @@
+{
+  "name": "pelican-test",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "《鹈鹕测试》——人类自古以来就痴迷于画鹈鹕骑自行车 (120 BPM, 2:17 procedural animation)",
+  "license": "MIT",
+  "scripts": {
+    "preview": "node tools/server.mjs",
+    "shot": "node tools/shot.mjs",
+    "sheet": "node tools/sheet.mjs",
+    "render": "node tools/render-frames.mjs",
+    "render-audio": "node tools/render-audio.mjs",
+    "encode": "node tools/encode.mjs",
+    "compare-fps": "node tools/compare-fps.mjs",
+    "build-film": "node tools/render-audio.mjs && node tools/render-frames.mjs --from 0 --to 137 --fps 60 --outDir frames/final_master --workers 6 && node tools/encode.mjs --frames frames/final_master --fps 60 --audio out/soundtrack.wav --out out/pelican_test_final_1080p_60fps.mp4"
+  },
+  "dependencies": {
+    "@puppeteer/browsers": "^2.4.0",
+    "p5": "^2.2.0",
+    "p5.brush": "^3.0.0",
+    "puppeteer-core": "^23.0.0"
+  }
+}

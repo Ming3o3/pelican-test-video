@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pelican Test — Headless Renderer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="/public/vendor/p5.min.js"></script>
+    <script>window.p5 && (window.p5.disableFriendlyErrors = true);</script>
+    <script src="/public/vendor/p5.brush.js"></script>
+    <script type="module">
+      import { createPelicanApp } from "/src/main.js";
+
+      createPelicanApp({
+        container: document.body,
+        autoplay: false,
+        onReady: (api) => {
+          const initialT = Number(new URLSearchParams(location.search).get("t") || 0);
+          api.renderAt(initialT);
+          window.__RENDER_READY = true;
+        },
+      });
+    </script>
+  </body>
+</html>

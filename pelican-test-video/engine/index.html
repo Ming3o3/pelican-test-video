@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>《鹈鹕测试》— 120 BPM · 60fps 交互预览</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --panel: #16181e;
+        --border: #2b2f3a;
+        --text: #ece9e1;
+        --muted: #9399a8;
+        --accent: #e5a93c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "PingFang SC", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #stage-wrap {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 16px;
+      }
+      #canvas-host {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #canvas-host canvas {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto !important;
+        height: auto !important;
+        aspect-ratio: 16 / 9;
+        border-radius: 6px;
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
+        background: #000;
+      }
+      #transport {
+        height: 84px;
+        background: var(--panel);
+        border-top: 1px solid var(--border);
+        padding: 10px 20px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .scrub-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      #scrubber {
+        flex: 1;
+        accent-color: var(--accent);
+        cursor: pointer;
+        height: 6px;
+      }
+      .controls-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .btn-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        background: #232732;
+        color: var(--text);
+        border: 1px solid #353b4a;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+      button:hover {
+        background: #2d3342;
+        border-color: #4f586e;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #16120a;
+        border-color: var(--accent);
+        font-weight: 700;
+        min-width: 82px;
+      }
+      .meta-readout {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 13px;
+      }
+      .era-badge {
+        background: rgba(229, 169, 60, 0.14);
+        border: 1px solid rgba(229, 169, 60, 0.4);
+        color: #f3c874;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .mono {
+        font-family: Menlo, Monaco, monospace;
+        color: var(--muted);
+      }
+      .time-code {
+        font-family: Menlo, Monaco, monospace;
+        font-size: 13px;
+        min-width: 140px;
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="stage-wrap">
+      <div id="canvas-host"></div>
+    </main>
+
+    <footer id="transport">
+      <div class="scrub-row">
+        <span id="time-cur" class="mono">00:00.00</span>
+        <input id="scrubber" type="range" min="0" max="137" step="0.01" value="0" />
+        <span id="time-tot" class="mono">02:17.00</span>
+      </div>
+      <div class="controls-row">
+        <div class="btn-group">
+          <button id="btn-play" class="primary">播放 Play</button>
+          <button id="btn-prev-era">上一版块</button>
+          <button id="btn-next-era">下一版块</button>
+          <button id="btn-step-back">-1 帧</button>
+          <button id="btn-step-fwd">+1 帧</button>
+          <button id="btn-reset">回到开头</button>
+          <button id="btn-mute">🔊 声音开</button>
+        </div>
+        <div class="meta-readout">
+          <span id="era-label" class="era-badge">Intro · 开场序言</span>
+          <span id="beat-label" class="mono">Bar 1 · Beat 1</span>
+          <span id="audio-status" class="mono">120 BPM · 合成配乐渲染中...</span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="/public/vendor/p5.min.js"></script>
+    <script>window.p5 && (window.p5.disableFriendlyErrors = true);</script>
+    <script src="/public/vendor/p5.brush.js"></script>
+    <script type="module">
+      import { INTRO_DUR, SCENE_COUNT, SCENE_DUR, TOTAL_DUR } from "/src/beat.js";
+      import { createPelicanApp } from "/src/main.js";
+      import { createAudioPlayer } from "/audio/player.js";
+
+      const scrubber = document.getElementById("scrubber");
+      const btnPlay = document.getElementById("btn-play");
+      const btnPrevEra = document.getElementById("btn-prev-era");
+      const btnNextEra = document.getElementById("btn-next-era");
+      const btnStepBack = document.getElementById("btn-step-back");
+      const btnStepFwd = document.getElementById("btn-step-fwd");
+      const btnReset = document.getElementById("btn-reset");
+      const btnMute = document.getElementById("btn-mute");
+      const timeCur = document.getElementById("time-cur");
+      const eraLabel = document.getElementById("era-label");
+      const beatLabel = document.getElementById("beat-label");
+      const audioStatus = document.getElementById("audio-status");
+
+      const milestones = [
+        0,
+        ...Array.from({ length: SCENE_COUNT }, (_, i) => INTRO_DUR + i * SCENE_DUR + 2.5),
+        INTRO_DUR + SCENE_COUNT * SCENE_DUR + 2.0,
+      ];
+
+      function fmtTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = (sec % 60).toFixed(2).padStart(5, "0");
+        return `${String(m).padStart(2, "0")}:${s}`;
+      }
+
+      const audioPlayer = createAudioPlayer({
+        onStatusChange: ({ text }) => {
+          audioStatus.textContent = text;
+        },
+      });
+      audioPlayer.prepare();
+
+      function syncHud(t) {
+        if (!window.pelicanApp) return;
+        const info = window.pelicanApp.getSegmentInfo(t);
+        scrubber.value = t.toFixed(2);
+        timeCur.textContent = fmtTime(t);
+        eraLabel.textContent = info.label;
+        beatLabel.textContent = `Bar ${info.beat.barIndex + 1} · Beat ${info.beat.beatInBar + 1}`;
+        btnPlay.textContent = window.pelicanApp.isPlaying() ? "暂停 Pause" : "播放 Play";
+      }
+
+      const app = createPelicanApp({
+        container: document.getElementById("canvas-host"),
+        autoplay: false,
+        clockSource: () => audioPlayer.getAudioTime(),
+        onPlayStateChange: (playing) => {
+          if (playing) {
+            audioPlayer.startFrom(window.pelicanApp ? window.pelicanApp.getTime() : 0);
+          } else {
+            audioPlayer.stop();
+          }
+          syncHud(window.pelicanApp ? window.pelicanApp.getTime() : 0);
+        },
+        onReady: (api) => {
+          const initialT = Number(new URLSearchParams(location.search).get("t") || 0);
+          api.renderAt(initialT);
+          syncHud(api.getTime());
+        },
+        onFrameStats: ({ t }) => {
+          syncHud(t);
+        },
+      });
+
+      function pauseAndSeek(t) {
+        app.pause();
+        app.renderAt(t);
+        syncHud(app.getTime());
+      }
+
+      scrubber.addEventListener("input", () => {
+        pauseAndSeek(Number(scrubber.value));
+      });
+
+      btnPlay.addEventListener("click", () => {
+        app.togglePlay();
+        syncHud(app.getTime());
+      });
+
+      btnMute.addEventListener("click", () => {
+        const muted = audioPlayer.toggleMute();
+        btnMute.textContent = muted ? "🔇 已静音" : "🔊 声音开";
+      });
+
+      btnReset.addEventListener("click", () => {
+        pauseAndSeek(0);
+      });
+
+      btnStepBack.addEventListener("click", () => {
+        pauseAndSeek(app.getTime() - 1 / 60);
+      });
+
+      btnStepFwd.addEventListener("click", () => {
+        pauseAndSeek(app.getTime() + 1 / 60);
+      });
+
+      btnPrevEra.addEventListener("click", () => {
+        const t = app.getTime();
+        const prev = [...milestones].reverse().find((m) => m < t - 0.5) ?? 0;
+        pauseAndSeek(prev);
+      });
+
+      btnNextEra.addEventListener("click", () => {
+        const t = app.getTime();
+        const next = milestones.find((m) => m > t + 0.5) ?? TOTAL_DUR;
+        pauseAndSeek(next);
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if (e.code === "Space") {
+          e.preventDefault();
+          app.togglePlay();
+          syncHud(app.getTime());
+        } else if (e.code === "ArrowRight") {
+          pauseAndSeek(app.getTime() + (e.shiftKey ? 1.0 : 1 / 30));
+        } else if (e.code === "ArrowLeft") {
+          pauseAndSeek(app.getTime() - (e.shiftKey ? 1.0 : 1 / 30));
+        }
+      });
+    </script>
+  </body>
+</html>

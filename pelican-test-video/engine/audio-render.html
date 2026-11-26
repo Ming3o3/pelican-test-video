@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Pelican Test — Headless Audio Renderer</title>
+  </head>
+  <body>
+    <script type="module">
+      import { analyzeAudioBuffer, encodeWav16Bit, renderFullSoundtrack } from "/audio/engine.js";
+
+      window.__buildSoundtrack = async () => {
+        const buf = await renderFullSoundtrack({ sampleRate: 48000 });
+        const report = analyzeAudioBuffer(buf);
+        const wav = encodeWav16Bit(buf);
+        window.__wavBytes = wav;
+        return { report, byteLength: wav.byteLength };
+      };
+
+      window.__getWavChunkBase64 = async (offset, length) => {
+        const slice = window.__wavBytes.subarray(offset, offset + length);
+        const blob = new Blob([slice], { type: "application/octet-stream" });
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const url = reader.result;
+            resolve(url.slice(url.indexOf(",") + 1));
+          };
+          reader.onerror = () => reject(reader.error || new Error("FileReader error"));
+          reader.readAsDataURL(blob);
+        });
+      };
+
+      window.__AUDIO_RENDER_READY = true;
+    </script>
+  </body>
+</html>
